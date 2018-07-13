@@ -1,5 +1,5 @@
 
-INES_OBJECTS=main.o ines.o ppu.o
+INES_OBJECTS=main.o ines.o
 
 .PHONY=run all
 

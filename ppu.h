@@ -25,31 +25,14 @@
 
 ;;; ===============================================
 ;;;
-;;;    LoadSpritePalette
-;;;
-;;;      X - palette data array
+;;;    ld_Palette
 ;;;
 ;;; ===============================================
 
-    .macro ld_SpritePalette palette
+    .macro ld_Palette palette
     ;; Initialize PPU Write Address to $3f10
     ;; Load $20 bytes of palette data
-    init_ppu_addr PPU_ADDR_PAL_SPRITE
-    copy_palette palette
-    .endmacro
-
-;;; ===============================================
-;;;
-;;;    LoadBackgroundPalette
-;;;
-;;;      X - palette data array
-;;;
-;;; ===============================================
-
-    .macro ld_BackgroundPalette palette
-    ;; Initialize PPU Write Address to $3f10
-    ;; Load $20 bytes of palette data
-    init_ppu_addr PPU_ADDR_PAL_BKG
+    init_ppu_addr PPU_ADDR_PALETTE
     copy_palette palette
     .endmacro
 
