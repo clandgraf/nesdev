@@ -54,10 +54,13 @@ MarioSprite:
     cpx #$10
     bne :-
 
-    ;; Mario's Initial Position
+    ;; Initialize Marios Data
     ldx #$80
     stx MARIO_Y
     stx MARIO_X
+    ldx #$00
+    stx MARIO_VEL_X
+    stx MARIO_VEL_Y
 
     ;; Initialize PPU
     lda #%10000000              ; Enable nmi, sprites from table 0
@@ -72,21 +75,46 @@ GameLoop:
 
     lda GAMEPAD1
     and #GAMEPAD_LEFT
-    beq :+
-    ;; Left pushed
-    ldx MARIO_X
-    dex
-    stx MARIO_X
-    jmp :++                     ; Skip Right Button
-:
+    beq GamepadRight
+    ;; Left pushed -> decrease velocity if > -3
+    lda MARIO_VEL_X
+    cmp #$fd
+    beq GamepadEnd              ; Left and Max Speed (-3) -> End
+    sec                         ; Else decrease by one
+    sbc #$01
+    sta MARIO_VEL_X
+    jmp GamepadEnd              ; Done -> End
+GamepadRight:
     lda GAMEPAD1
     and #GAMEPAD_RIGHT
-    beq :+
-    ;; Right pushed
-    ldx MARIO_X
-    inx
-    stx MARIO_X
-:
+    beq GamepadNone
+    ;; Right pushed -> increase velocity
+    lda MARIO_VEL_X
+    cmp #$03
+    beq GamepadEnd              ; Right and Max Speed (+3) -> End
+    clc                         ; Else increase by one
+    adc #$1
+    sta MARIO_VEL_X
+    jmp GamepadEnd
+GamepadNone:
+    lda MARIO_VEL_X
+    beq GamepadEnd              ; Zero do nothing
+    cmp #$04
+    bcc :+
+    clc                         ; Negative (< 0)
+    adc #$01
+    sta MARIO_VEL_X
+    jmp GamepadEnd
+:   sec                         ; Positive (< 4)
+    sbc #$01
+    sta MARIO_VEL_X
+
+GamepadEnd:
+    ;; Add Velocity to Position
+    lda MARIO_X
+    clc
+    adc MARIO_VEL_X
+    sta MARIO_X
 
 ;;; Update Marios Sprite
 

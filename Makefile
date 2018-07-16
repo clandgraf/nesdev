@@ -8,7 +8,7 @@ INES_OBJECTS=main.o ines.o
 
 all:	test.nes
 run:	test.nes
-	C:/Users/cla/fceux/fceux.exe test.nes
+	fceux test.nes
 
 test.nes:	$(INES_OBJECTS)
 	ld65 -C link.x $^ -o test.nes
