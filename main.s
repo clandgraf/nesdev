@@ -12,8 +12,13 @@
 ;;;
 ;;; ==========================
 
-    MARIO_Y = $0300
-    MARIO_X = $0301
+    FRAME_READY   = $0300
+    MARIO_Y       = $0301
+    MARIO_X       = $0302
+    MARIO_VEL_X   = $0303
+    MARIO_VEL_Y   = $0304
+    GAMEPAD1      = $0305
+    GAMEPAD2      = $0306
 
     .code
 
@@ -60,20 +65,32 @@ MarioSprite:
     lda #%00010000              ; Enable sprites
     sta PPU_MASK
 
-forever:
-    jmp forever
+GameLoop:
+    jsr read_gamepads
 
-    .endproc
+;;; Update Marios position
 
-;;; ============================
-;;;
-;;;   NMI
-;;;
-;;; ============================
+    lda GAMEPAD1
+    and #GAMEPAD_LEFT
+    beq :+
+    ;; Left pushed
+    ldx MARIO_X
+    dex
+    stx MARIO_X
+    jmp :++                     ; Skip Right Button
+:
+    lda GAMEPAD1
+    and #GAMEPAD_RIGHT
+    beq :+
+    ;; Right pushed
+    ldx MARIO_X
+    inx
+    stx MARIO_X
+:
 
-    .proc nmi
+;;; Update Marios Sprite
 
-;;; Update Mario
+GameLoop_Sprites:
 
     ;; Update vertical position
     lda MARIO_Y
@@ -90,12 +107,50 @@ forever:
     sta OAM_BUF + $07
     sta OAM_BUF + $0f
 
+;;; Signal we may update frame and wait for NMI
+
+    lda #$01
+    sta FRAME_READY
+
+:   lda FRAME_READY
+    beq GameLoop
+    jmp :-
+
+    .endproc
+
+    .proc read_gamepads
+    read_gamepad GAMEPAD1_REG, GAMEPAD1
+    read_gamepad GAMEPAD2_REG, GAMEPAD2
+    rts
+    .endproc
+
+;;; ============================
+;;;
+;;;   NMI
+;;;
+;;; ============================
+
+    .proc nmi
+
+    push_regs
+
+;;; Skip PPU Code if frame not ready
+
+    lda FRAME_READY
+    beq ReturnNMI
+
 ;;; Transfer Sprite Table
 
     lda #<OAM_BUF
     sta OAM_ADDR
     lda #>OAM_BUF
     sta OAM_DMA
+
+ReturnNMI:
+    lda #$00
+    sta FRAME_READY
+
+    pull_regs
 
     rti
     .endproc

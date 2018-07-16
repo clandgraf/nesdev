@@ -3,6 +3,24 @@
     .ifndef __DEFS_H__
     __DEFS_H__ = 1
 
+;;; General Macros
+
+    .macro push_regs
+    pha
+    txa
+    pha
+    tya
+    pha
+    .endmacro
+
+    .macro pull_regs
+    pla
+    tay
+    pla
+    tax
+    pla
+    .endmacro
+
 ;;; PPU registers
 
     PPU_CTRL   = $2000
@@ -34,5 +52,32 @@
 ;;; Others
 
     DMC_IRQ    = $4010
+
+;;; Gamepads
+
+    GAMEPAD1_REG = $4016
+    GAMEPAD2_REG = $4017
+
+    GAMEPAD_A      = %10000000
+    GAMEPAD_B      = %01000000
+    GAMEPAD_SELECT = %00100000
+    GAMEPAD_START  = %00010000
+    GAMEPAD_UP     = %00001000
+    GAMEPAD_DOWN   = %00000100
+    GAMEPAD_LEFT   = %00000010
+    GAMEPAD_RIGHT  = %00000001
+
+    .macro read_gamepad gamepad_reg, state_var
+    lda #$01
+    sta gamepad_reg
+    lda #$00
+    sta gamepad_reg
+    ldx #$08                    ; Read 8 Buttons in loop
+:   lda gamepad_reg
+    lsr a                       ; button state to carry
+    rol state_var               ; carry to button mask
+    dex
+    bne :-
+    .endmacro
 
     .endif
