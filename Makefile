@@ -1,4 +1,4 @@
-
+FCEUX=C:/Users/cla/fceux/fceux.exe
 INES_OBJECTS=main.o ines.o
 
 .PHONY=run all
@@ -8,7 +8,7 @@ INES_OBJECTS=main.o ines.o
 
 all:	test.nes
 run:	test.nes
-	fceux test.nes
+	$(FCEUX) test.nes
 
 test.nes:	$(INES_OBJECTS)
 	ld65 -C link.x $^ -o test.nes

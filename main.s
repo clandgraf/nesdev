@@ -1,7 +1,5 @@
 ;;; -*- mode: asm -*-
 
-    OAM_BUF = $0200
-
     .include "defs.s"
     .include "init.h"
     .include "ppu.h"
@@ -12,13 +10,21 @@
 ;;;
 ;;; ==========================
 
+    OAM_BUF       = $0200
+
+    .define OAMB_X(index) OAM_X OAM_BUF, index
+    .define OAMB_Y(index) OAM_Y OAM_BUF, index
+
+    ETP           = $00f0
+
     FRAME_READY   = $0300
-    MARIO_Y       = $0301
-    MARIO_X       = $0302
-    MARIO_VEL_X   = $0303
-    MARIO_VEL_Y   = $0304
-    GAMEPAD1      = $0305
-    GAMEPAD2      = $0306
+    GAMEPAD1      = $0301
+    GAMEPAD2      = $0302
+    MARIO_Y       = $0303
+    MARIO_X       = $0304
+    MARIO_ENTITY  = $0305
+    MARIO_VEL_X   = $0306
+    MARIO_VEL_Y   = $0307
 
     .code
 
@@ -32,8 +38,10 @@ SpritePalette:
     .incbin "res/test.pal"
 
 MarioSprite:
-    .byte $00, $32, $00, $00,   $00, $33, $00, $08
-    .byte $08, $34, $00, $00,   $08, $35, $00, $08
+MarioSpriteRight:
+    .byte $32, $00, $33, $00, $34, $00, $35, $00
+MarioSpriteLeft:
+    .byte $33, $40, $32, $40, $35, $40, $34, $40
 
 ;;; =========================
 ;;;
@@ -46,15 +54,9 @@ MarioSprite:
 
     ld_Palette SpritePalette
 
-    ;; Setup Sprite Table
+    ;; Initialize Mario Game Data
     ldx #$00
-:   lda MarioSprite, x
-    sta OAM_BUF, x
-    inx
-    cpx #$10
-    bne :-
-
-    ;; Initialize Marios Data
+    stx MARIO_ENTITY
     ldx #$80
     stx MARIO_Y
     stx MARIO_X
@@ -69,6 +71,7 @@ MarioSprite:
     sta PPU_MASK
 
 GameLoop:
+    jsr update_mario_oamb
     jsr read_gamepads
 
 ;;; Update Marios position
@@ -76,7 +79,9 @@ GameLoop:
     lda GAMEPAD1
     and #GAMEPAD_LEFT
     beq GamepadRight
-    ;; Left pushed -> decrease velocity if > -3
+    ;; Left pushed -> set direction, decrease velocity if > -3
+    lda #$08
+    sta MARIO_ENTITY            ; #$08 == MARIO_ENTITY_LEFT
     lda MARIO_VEL_X
     cmp #$fd
     beq GamepadEnd              ; Left and Max Speed (-3) -> End
@@ -88,7 +93,9 @@ GamepadRight:
     lda GAMEPAD1
     and #GAMEPAD_RIGHT
     beq GamepadNone
-    ;; Right pushed -> increase velocity
+    ;; Right pushed -> set direction, increase velocity
+    lda #$00
+    sta MARIO_ENTITY            ; #$00 == MARIO_ENTITY_RIGHT
     lda MARIO_VEL_X
     cmp #$03
     beq GamepadEnd              ; Right and Max Speed (+3) -> End
@@ -116,25 +123,6 @@ GamepadEnd:
     adc MARIO_VEL_X
     sta MARIO_X
 
-;;; Update Marios Sprite
-
-GameLoop_Sprites:
-
-    ;; Update vertical position
-    lda MARIO_Y
-    sta OAM_BUF
-    sta OAM_BUF + $04
-    adc #$08
-    sta OAM_BUF + $08
-    sta OAM_BUF + $0c
-    ;; Update horizontal position
-    lda MARIO_X
-    sta OAM_BUF + $03
-    sta OAM_BUF + $0b
-    adc #$08
-    sta OAM_BUF + $07
-    sta OAM_BUF + $0f
-
 ;;; Signal we may update frame and wait for NMI
 
     lda #$01
@@ -144,6 +132,71 @@ GameLoop_Sprites:
     beq GameLoop
     jmp :-
 
+    .endproc
+
+;;; ====================================================
+;;;
+;;;    load_entity
+;;;
+;;; Load an entity (table of sprite indices
+;;; /attributes) from pointer ETP.
+;;;
+;;; [ETP]   ZP Pointer to base of entity-table
+;;; Y       Offset in entity-table to correct
+;;;         sprite set
+;;;
+;;; ====================================================
+
+    .proc load_entity
+    ldx #$01
+:   lda (ETP), y      ; Copy Object Index
+    sta OAM_BUF, x
+    iny
+    inx
+    lda (ETP), y      ; Copy Object Attributes
+    sta OAM_BUF, x
+    iny
+    txa
+    clc
+    adc #$03
+    tax
+    cpy #$08                    ; TODO doesnt work, how to check for end of iteration?!
+    bne :-
+    rts
+    .endproc
+
+;;; =====================================================
+;;;
+;;;    update_mario_oamb
+;;;
+;;; =====================================================
+
+    .proc update_mario_oamb
+    ;; Update Marios sprite data from entity table
+    lda #<MarioSprite
+    sta ETP
+    lda #>MarioSprite
+    sta ETP + 1
+    ldy MARIO_ENTITY
+    jsr load_entity
+
+    ;; Update vertical position
+    lda MARIO_Y
+    sta OAMB_Y $0
+    sta OAMB_Y $1
+    clc
+    adc #$08
+    sta OAMB_Y $2
+    sta OAMB_Y $3
+    ;; Update horizontal position
+    lda MARIO_X
+    sta OAMB_X $0
+    sta OAMB_X $2
+    clc
+    adc #$08
+    sta OAMB_X $1
+    sta OAMB_X $3
+    rts
     .endproc
 
     .proc read_gamepads
@@ -189,7 +242,7 @@ ReturnNMI:
 
 ;;; ========================
 ;;;
-;;;    Vectors & ROM
+;;;    Vectors & CHR ROM
 ;;;
 ;;; =========================
 

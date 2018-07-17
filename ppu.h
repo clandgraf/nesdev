@@ -5,6 +5,9 @@
 
     .include "defs.s"
 
+    .define OAM_Y(base, index) base + index * $4
+    .define OAM_X(base, index) base + index * $4 + $3
+
     .macro init_ppu_addr addr
     lda PPU_STAT
     lda #>addr
