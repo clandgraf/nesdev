@@ -3,6 +3,7 @@
     .include "defs.s"
     .include "init.h"
     .include "ppu.h"
+    .include "nmi.h"
 
 ;;; ==========================
 ;;;
@@ -10,22 +11,31 @@
 ;;;
 ;;; ==========================
 
-    OAM_BUF       = $0200
+    OAM_BUF         = $0200
 
     .define OAMB_X(index) OAM_X OAM_BUF, index
     .define OAMB_Y(index) OAM_Y OAM_BUF, index
 
-    ETP           = $00f0
+    ETP             = $00f0
 
     FRAME_READY     = $0300
     GAMEPAD1        = $0301
     GAMEPAD2        = $0302
+
     MARIO_Y         = $0303
-    MARIO_X         = $0304
-    MARIO_VEL_X     = $0306
-    MARIO_VEL_Y     = $0307
-    MARIO_ENTITY    = $0305
-    MARIO_DIR       = $0308
+    MARIO_Y_LO      = $0303
+    MARIO_Y_HI      = $0304
+    MARIO_X         = $0305
+    MARIO_X_LO      = $0305
+    MARIO_X_HI      = $0306
+    MARIO_VEL_X     = $0307
+    MARIO_VEL_X_LO  = $0307
+    MARIO_VEL_X_HI  = $0308
+    MARIO_VEL_Y     = $0309
+    MARIO_VEL_Y_LO  = $0309
+    MARIO_VEL_Y_HI  = $0310
+    MARIO_ENTITY    = $0311
+    MARIO_DIR       = $0312
     MARIO_DIR_LEFT  = $00
     MARIO_DIR_RIGHT = $01
 
@@ -69,6 +79,7 @@ MARIO_OFF_RUN_LEFT    = MarioSpriteRunLeft - MarioSprite
     ;; Initialize Mario Game Data
     ldx #$00
     stx MARIO_ENTITY
+    stx MARIO_DIR
     ldx #$80
     stx MARIO_Y
     stx MARIO_X
@@ -86,15 +97,8 @@ GameLoop:
     jsr update_mario_oamb
     jsr read_gamepads
     jsr update_mario_physics
-
-;;; Signal we may update frame and wait for NMI
-
-    lda #$01
-    sta FRAME_READY
-
-:   lda FRAME_READY
-    beq GameLoop
-    jmp :-
+    wait_for_nmi FRAME_READY
+    jmp GameLoop
 
     .endproc
 
@@ -148,8 +152,6 @@ GameLoop:
     and #GAMEPAD_LEFT
     beq GamepadRight
     ;; Left pushed -> set direction, decrease velocity if > -3
-    ;; lda #MARIO_OFF_RUN_LEFT
-    ;; sta MARIO_ENTITY            ; #$08 == MARIO_ENTITY_LEFT
     lda MARIO_VEL_X
     cmp #$fd
     beq GamepadEnd              ; Left and Max Speed (-3) -> End
@@ -162,8 +164,6 @@ GamepadRight:
     and #GAMEPAD_RIGHT
     beq GamepadNone
     ;; Right pushed -> set direction, increase velocity
-    ;; lda #MARIO_OFF_RUN_RIGHT
-    ;; sta MARIO_ENTITY            ; #$00 == MARIO_ENTITY_RIGHT
     lda MARIO_VEL_X
     cmp #$03
     beq GamepadEnd              ; Right and Max Speed (+3) -> End
@@ -264,28 +264,16 @@ MarioMove:
 ;;; ============================
 
     .proc nmi
-
-    push_regs
-
-;;; Skip PPU Code if frame not ready
-
-    lda FRAME_READY
-    beq ReturnNMI
-
-;;; Transfer Sprite Table
+    start_nmi
+    ;; Do non-ppu-related tasks here
+    check_for_frame_nmi FRAME_READY
 
     lda #<OAM_BUF
     sta OAM_ADDR
     lda #>OAM_BUF
     sta OAM_DMA
 
-ReturnNMI:
-    lda #$00
-    sta FRAME_READY
-
-    pull_regs
-
-    rti
+    return_from_nmi FRAME_READY
     .endproc
 
     .proc irq
