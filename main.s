@@ -152,41 +152,38 @@ GameLoop:
     and #GAMEPAD_LEFT
     beq GamepadRight
     ;; Left pushed -> set direction, decrease velocity if > -3
-    lda MARIO_VEL_X
+    lda MARIO_VEL_X_HI
     cmp #$fd
     beq GamepadEnd              ; Left and Max Speed (-3) -> End
     sec                         ; Else decrease by one
     sbc #$01
-    sta MARIO_VEL_X
+    sta MARIO_VEL_X_HI
     jmp GamepadEnd              ; Done -> End
 GamepadRight:
     lda GAMEPAD1
     and #GAMEPAD_RIGHT
     beq GamepadNone
     ;; Right pushed -> set direction, increase velocity
-    lda MARIO_VEL_X
+    lda MARIO_VEL_X_HI
     cmp #$03
     beq GamepadEnd              ; Right and Max Speed (+3) -> End
-    clc                         ; Else increase by one
-    adc #$1
-    sta MARIO_VEL_X
+    add16_i MARIO_VEL_X, $40    ; Else increase by one .25
     jmp GamepadEnd
 GamepadNone:
-    lda MARIO_VEL_X
+    lda MARIO_VEL_X_LO
+    bne :+
+    lda MARIO_VEL_X_HI
     beq GamepadEnd              ; Zero do nothing
+:   lda MARIO_VEL_X_HI
     cmp #$04                    ; Between 0 and 4?
-    bcc :+
-    clc                         ; Negative (< 0), slow down
-    adc #$01
-    sta MARIO_VEL_X
+    bcc :+                      ; Negative (> 4), slow down
+    add16_i MARIO_VEL_X, $40
     jmp GamepadEnd
-:   sec                         ; Positive (< 4), slow down
-    sbc #$01
-    sta MARIO_VEL_X
+:   sub16_i MARIO_VEL_X, $40    ; Positive (< 4), slow down
 
 GamepadEnd:
     ;; Set Mario's direction and his sprite
-    lda MARIO_VEL_X
+    lda MARIO_VEL_X_HI
     beq MarioStands             ; 0 == Mario Stands
     cmp #$04
     bcc :+
@@ -210,7 +207,7 @@ MarioMove:
     ;; Add Velocity to Position
     lda MARIO_X
     clc
-    adc MARIO_VEL_X
+    adc MARIO_VEL_X_HI
     sta MARIO_X
     rts
     .endproc

@@ -80,4 +80,24 @@
     bne :-
     .endmacro
 
+    .macro add16_i address, value
+    lda address
+    clc
+    adc #<value
+    sta address
+    lda address + 1
+    adc #>value
+    sta address + 1
+    .endmacro
+
+    .macro sub16_i address, value
+    lda address
+    sec
+    sbc #<value
+    sta address
+    lda address + 1
+    sbc #>value
+    sta address + 1
+    .endmacro
+
     .endif
