@@ -1,4 +1,4 @@
-FCEUX=fceux
+FCEUX=C:/Users/cla/fceux/fceux.exe
 INES_OBJECTS=main.o ines.o
 
 .PHONY=run all

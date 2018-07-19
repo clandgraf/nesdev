@@ -39,6 +39,11 @@
     MARIO_DIR_LEFT  = $00
     MARIO_DIR_RIGHT = $01
 
+    MARIO_RUN_TIM  = $0313     ; PPU frames per animation frame
+    MARIO_RUN_TIC  = $f0
+    MARIO_RUN_FRM  = $0314     ; Current animation frame
+    MARIO_RUN_FRC  = $04
+
     .code
 
 ;;; ==========================
@@ -51,19 +56,55 @@ SpritePalette:
     .incbin "res/test.pal"
 
 MarioSprite:
+MarioSpriteRight:
 MarioSpriteStandRight:
     .byte $3a, $00, $37, $00, $3b, $00, $3c, $00
-MarioSpriteStandLeft:
-    .byte $37, $40, $3a, $40, $3c, $40, $3b, $40
 MarioSpriteRunRight:
     .byte $32, $00, $33, $00, $34, $00, $35, $00
+MarioSpriteLeft:
+MarioSpriteStandLeft:
+    .byte $37, $40, $3a, $40, $3c, $40, $3b, $40
 MarioSpriteRunLeft:
     .byte $33, $40, $32, $40, $35, $40, $34, $40
+
+MarioAnimRunRight:
+    .byte MarioSpriteStandRight - MarioSprite
+    .byte MarioSpriteStandRight - MarioSprite
+    .byte MarioSpriteRunRight   - MarioSprite
+    .byte MarioSpriteStandRight - MarioSprite
+    .byte MarioSpriteRunRight   - MarioSprite
+MarioAnimRunLeft:
+    .byte MarioSpriteStandLeft  - MarioSprite
+    .byte MarioSpriteStandLeft  - MarioSprite
+    .byte MarioSpriteRunLeft    - MarioSprite
+    .byte MarioSpriteStandLeft  - MarioSprite
+    .byte MarioSpriteRunLeft    - MarioSprite
+
+;;; ldx MARIO_RUN_FRM
+;;; ldy MarioAnimRunRight, X ; Y now contains offset relative MarioSprite
 
 MARIO_OFF_STAND_RIGHT = MarioSpriteStandRight - MarioSprite
 MARIO_OFF_STAND_LEFT  = MarioSpriteStandLeft - MarioSprite
 MARIO_OFF_RUN_RIGHT   = MarioSpriteRunRight - MarioSprite
 MARIO_OFF_RUN_LEFT    = MarioSpriteRunLeft - MarioSprite
+
+    .macro tick_anim timer_ptr, timer_cnt, frame_ptr, frame_cnt
+    dec timer_ptr
+    bne :+
+    lda #timer_cnt
+    sta timer_ptr
+    dec frame_ptr
+    bne :+
+    lda #frame_cnt
+    sta frame_ptr
+:   .endmacro
+
+    .macro reset_anim timer_ptr, frame_ptr
+    lda #$00
+    sta timer_ptr
+    lda #$00
+    sta frame_ptr
+    .endmacro
 
 ;;; =========================
 ;;;
@@ -86,6 +127,7 @@ MARIO_OFF_RUN_LEFT    = MarioSpriteRunLeft - MarioSprite
     ldx #$00
     stx MARIO_VEL_X
     stx MARIO_VEL_Y
+    reset_anim MARIO_RUN_TIM, MARIO_RUN_TIC, MARIO_RUN_FRM, MARIO_RUN_FRC
 
     ;; Initialize PPU
     lda #%10000000              ; Enable nmi, sprites from table 0
@@ -121,7 +163,7 @@ GameLoop:
     clc
     adc ETP + $2
     sta ETP + $2
-    ldx #$01
+    ldx #$01          ; Iteration starts at 1 (skip position)
 :   lda (ETP), y      ; Copy Object Index
     sta OAM_BUF, x
     iny
@@ -133,7 +175,7 @@ GameLoop:
     clc
     adc #$03
     tax
-    cpy ETP + $2      ; TODO doesnt work, how to check for end of iteration?!
+    cpy ETP + $2
     bne :-
     rts
     .endproc
@@ -152,6 +194,7 @@ GameLoop:
     and #GAMEPAD_LEFT
     beq GamepadRight
     ;; Left pushed -> set direction, decrease velocity if > -3
+    tick_anim MARIO_RUN_TIM, MARIO_RUN_TIC, MARIO_RUN_FRM, MARIO_RUN_FRC
     lda MARIO_VEL_X_HI
     cmp #$fd
     beq GamepadEnd              ; Left and Max Speed (-3) -> End
@@ -160,6 +203,7 @@ GameLoop:
     sta MARIO_VEL_X_HI
     jmp GamepadEnd              ; Done -> End
 GamepadRight:
+    tick_anim MARIO_RUN_TIM, MARIO_RUN_TIC, MARIO_RUN_FRM, MARIO_RUN_FRC
     lda GAMEPAD1
     and #GAMEPAD_RIGHT
     beq GamepadNone
@@ -170,6 +214,7 @@ GamepadRight:
     add16_i MARIO_VEL_X, $40    ; Else increase by one .25
     jmp GamepadEnd
 GamepadNone:
+    reset_anim MARIO_RUN_TIM, MARIO_RUN_FRM
     lda MARIO_VEL_X_LO
     bne :+
     lda MARIO_VEL_X_HI
@@ -195,8 +240,8 @@ GamepadEnd:
     sta MARIO_DIR
     lda #MARIO_OFF_RUN_RIGHT
     jmp MarioMove
-MarioStands:                    ; Calculate
-    lda MARIO_DIR
+MarioStands:
+    lda MARIO_DIR               ; Set entity based on direction
     beq :+
     lda #MARIO_OFF_STAND_RIGHT  ; != 0 -> MARIO_DIR_RIGHT
     jmp MarioMove
