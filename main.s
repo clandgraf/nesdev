@@ -67,13 +67,13 @@ MarioSpriteStandLeft:
 MarioSpriteRunLeft:
     .byte $33, $40, $32, $40, $35, $40, $34, $40
 
-MarioAnimRunRight:
+MarioAnimRight:
     .byte MarioSpriteStandRight - MarioSprite
     .byte MarioSpriteStandRight - MarioSprite
     .byte MarioSpriteRunRight   - MarioSprite
     .byte MarioSpriteStandRight - MarioSprite
     .byte MarioSpriteRunRight   - MarioSprite
-MarioAnimRunLeft:
+MarioAnimLeft:
     .byte MarioSpriteStandLeft  - MarioSprite
     .byte MarioSpriteStandLeft  - MarioSprite
     .byte MarioSpriteRunLeft    - MarioSprite
@@ -88,61 +88,6 @@ MARIO_OFF_STAND_LEFT  = MarioSpriteStandLeft - MarioSprite
 MARIO_OFF_RUN_RIGHT   = MarioSpriteRunRight - MarioSprite
 MARIO_OFF_RUN_LEFT    = MarioSpriteRunLeft - MarioSprite
 
-    .macro tick_anim timer_ptr, timer_cnt, frame_ptr, frame_cnt
-    dec timer_ptr
-    bne :+
-    lda #timer_cnt
-    sta timer_ptr
-    dec frame_ptr
-    bne :+
-    lda #frame_cnt
-    sta frame_ptr
-:   .endmacro
-
-    .macro reset_anim timer_ptr, frame_ptr
-    lda #$00
-    sta timer_ptr
-    lda #$00
-    sta frame_ptr
-    .endmacro
-
-;;; =========================
-;;;
-;;;   RESET
-;;;
-;;; =========================
-
-    .proc reset
-    init_nes
-
-    ld_Palette SpritePalette
-
-    ;; Initialize Mario Game Data
-    ldx #$00
-    stx MARIO_ENTITY
-    stx MARIO_DIR
-    ldx #$80
-    stx MARIO_Y
-    stx MARIO_X
-    ldx #$00
-    stx MARIO_VEL_X
-    stx MARIO_VEL_Y
-    reset_anim MARIO_RUN_TIM, MARIO_RUN_TIC, MARIO_RUN_FRM, MARIO_RUN_FRC
-
-    ;; Initialize PPU
-    lda #%10000000              ; Enable nmi, sprites from table 0
-    sta PPU_CTRL
-    lda #%00010000              ; Enable sprites
-    sta PPU_MASK
-
-GameLoop:
-    jsr update_mario_oamb
-    jsr read_gamepads
-    jsr update_mario_physics
-    wait_for_nmi FRAME_READY
-    jmp GameLoop
-
-    .endproc
 
 ;;; ====================================================
 ;;;
@@ -178,6 +123,76 @@ GameLoop:
     cpy ETP + $2
     bne :-
     rts
+    .endproc
+
+    .macro tick_anim timer_ptr, timer_cnt, frame_ptr, frame_cnt
+    dec timer_ptr
+    bne :+
+    lda #timer_cnt
+    sta timer_ptr
+    dec frame_ptr
+    bne :+
+    lda #frame_cnt
+    sta frame_ptr
+:   .endmacro
+
+    .macro reset_anim timer_ptr, frame_ptr
+    lda #$00
+    sta timer_ptr
+    lda #$00
+    sta frame_ptr
+    .endmacro
+
+    .macro load_anim frame_ptr, etp_base, etp_offset_table
+    ;; Write ETP
+    lda #<etp_base
+    sta ETP
+    lda #>etp_base
+    sta ETP + 1
+    lda #$08
+    sta ETP + 2
+    ;; Load ETP Offset from animation frame ptr
+    ldx frame_ptr
+    ldy etp_offset_table, X
+    jsr load_entity
+    .endmacro
+
+;;; =========================
+;;;
+;;;   RESET
+;;;
+;;; =========================
+
+    .proc reset
+    init_nes
+
+    ld_Palette SpritePalette
+
+    ;; Initialize Mario Game Data
+    ldx #$00
+    stx MARIO_ENTITY
+    stx MARIO_DIR
+    ldx #$80
+    stx MARIO_Y
+    stx MARIO_X
+    ldx #$00
+    stx MARIO_VEL_X
+    stx MARIO_VEL_Y
+    reset_anim MARIO_RUN_TIM, MARIO_RUN_FRM
+
+    ;; Initialize PPU
+    lda #%10000000              ; Enable nmi, sprites from table 0
+    sta PPU_CTRL
+    lda #%00010000              ; Enable sprites
+    sta PPU_MASK
+
+GameLoop:
+    jsr update_mario_oamb
+    jsr read_gamepads
+    jsr update_mario_physics
+    wait_for_nmi FRAME_READY
+    jmp GameLoop
+
     .endproc
 
 ;;; ==========================================================
@@ -265,17 +280,22 @@ MarioMove:
 
     .proc update_mario_oamb
     ;; Update Marios sprite data from entity table
-    lda #<MarioSprite
-    sta ETP
-    lda #>MarioSprite
-    sta ETP + 1
-    lda #$08
-    sta ETP + 2
-    ldy MARIO_ENTITY
-    jsr load_entity
+    ;; lda #<MarioSprite
+    ;; sta ETP
+    ;; lda #>MarioSprite
+    ;; sta ETP + 1
+    ;; lda #$08
+    ;; sta ETP + 2
+    ;; ldy MARIO_ENTITY
+    ;; jsr load_entity
+    lda MARIO_DIR
+    beq :+
+    load_anim MARIO_RUN_FRM, MarioSprite, MarioAnimRight
+    jmp :++
+:   load_anim MARIO_RUN_FRM, MarioSprite, MarioAnimLeft
 
     ;; Update vertical position
-    lda MARIO_Y
+:   lda MARIO_Y
     sta OAMB_Y $0
     sta OAMB_Y $1
     clc
